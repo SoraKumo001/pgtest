@@ -1,0 +1,46 @@
+version: "3.7"
+
+services:
+  pg_master:
+    build: ./pg_master
+    ports:
+      - 15432:5432
+    environment:
+      POSTGRES_DB: test
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - pg_master:/var/lib/postgresql/data
+  pg_slave:
+    build: ./pg_slave
+    depends_on:
+      - "pg_master"
+    ports:
+      - 25432:5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    command: >
+      bash -c "su postgres -c 'pg_basebackup -h pg_master -D /var/lib/postgresql/data -R --progress -U admin' || \
+      chmod 750 /var/lib/postgresql/data;su postgres -c 'pg_ctl start';while :; do sleep 10; done"
+    volumes:
+      - pg_slave:/var/lib/postgresql/data
+  pg_pool:
+    image: bitnami/pgpool:4
+    depends_on:
+      - pg_master
+      - pg_slave
+    ports:
+      - 5432:5432
+    environment:
+      - PGPOOL_BACKEND_NODES=0:pg_slave:5432,1:pg_master:5432
+      - PGPOOL_SR_CHECK_USER=admin
+      - PGPOOL_SR_CHECK_PASSWORD=admin
+      - PGPOOL_ENABLE_LDAP=no
+      - PGPOOL_POSTGRES_USERNAME=admin
+      - PGPOOL_POSTGRES_PASSWORD=admin
+      - PGPOOL_ADMIN_USERNAME=admin
+      - PGPOOL_ADMIN_PASSWORD=admin
+volumes:
+  pg_master:
+  pg_slave:
